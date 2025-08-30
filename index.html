@@ -2,9 +2,243 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>テスト</title>
+  <title></title>
+  <style>
+    body {
+  margin: 0;
+  background: #f9b233; /* 参考画像の黄色背景 */
+  overflow: hidden;
+  font-family: sans-serif;
+}
+
+#game-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+#gameCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: transparent;
+}
+
+/* 左上のカウンター */
+#ui {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 20px;
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+}
+
+#pan {
+  position: absolute;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 50px;
+  background: #333;
+  border-radius: 25px;
+}
+
+#pan::after {
+  content: '';
+  position: absolute;
+  right: -50px;
+  top: 15px;
+  width: 50px;
+  height: 20px;
+  background: #333;
+  border-radius: 10px;
+}
+
+.pancake {
+  width: 80px;
+  height: 20px;
+  border-radius: 50%;
+  background: #c68642;
+  border: 4px solid #7b4f2a;
+  margin: auto;
+  position: relative;
+}
+
+.face::before {
+  content: "◉";
+  position: absolute;
+  left: 22px;
+  top: 2px;
+}
+
+.face::after {
+  content: "◉";
+  position: absolute;
+  right: 22px;
+  top: 2px;
+}
+
+.face {
+  text-align: center;
+  font-size: 18px;
+  color: black;
+}
+
+#gameOver {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  font-weight: bold;
+  color: red;
+  display: none;
+}
+  </style>
 </head>
 <body>
-  <h1>初公開サイト！！</h1>
+  <div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 左上のUI -->
+    <div id="ui">
+      <div id="counter">0 枚</div>
+    </div>
+
+    <div id="gameOver"></div>
+
+    <!-- フライパン -->
+    <div id="pan">
+    </div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+  <script>
+    // Matter.js setup
+const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
+
+const canvas = document.getElementById("gameCanvas");
+const engine = Engine.create();
+const world = engine.world;
+
+// Renderer
+const render = Render.create({
+  canvas: canvas,
+  engine: engine,
+  options: {
+    width: window.innerWidth,
+    height: window.innerHeight,
+    background: "transparent",
+    wireframes: false
+  }
+});
+
+Render.run(render);
+const runner = Runner.create();
+Runner.run(runner, engine);
+
+// Ground (plate)
+const ground = Bodies.rectangle(window.innerWidth/2, window.innerHeight - 50, 100, 20, {
+  isStatic: true,
+  render: { fillStyle: "#fff" }
+});
+World.add(world, ground);
+
+let counter = 0;
+let draggingPancake = null;
+let pancakes = [];
+let isGameOver = false;
+let cameraTargetHeight = window.innerHeight;
+let cameraHeight = window.innerHeight;
+
+// Spawn pancake from pan
+function spawnPancake(x, y) {
+  return Bodies.rectangle(x, y, 100, 20, {
+    chamfer: { radius: 10 },
+    restitution: 0.2,
+    friction: 0.8,
+    render: {
+      fillStyle: "#c68642",
+      strokeStyle: "#7b4f2a",
+      lineWidth: 4
+    }
+  });
+}
+
+// Define pan area as rectangle around top center
+const panX = window.innerWidth / 2;
+const panY = 100;
+const panWidth = 150;
+const panHeight = 50;
+
+let isHolding = false;
+
+
+// Helper: get mouse position in world coordinates
+function getMousePosition(e) {
+  const rect = canvas.getBoundingClientRect();
+  // Mouse position relative to canvas
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+  // Map to world coordinates using render.bounds
+  const bounds = render.bounds;
+  const canvasWidth = rect.width;
+  const canvasHeight = rect.height;
+  const worldX =
+    bounds.min.x + (mouseX / canvasWidth) * (bounds.max.x - bounds.min.x);
+  const worldY =
+    bounds.min.y + (mouseY / canvasHeight) * (bounds.max.y - bounds.min.y);
+  return { x: worldX, y: worldY };
+}
+
+canvas.addEventListener("mousedown", e => {
+  if (isGameOver) return;
+  if (!isHolding && !draggingPancake) {
+    // Get mouse position in world coordinates
+    const pos = getMousePosition(e);
+    // Spawn pancake at cursor position, static
+    draggingPancake = spawnPancake(pos.x, pos.y);
+    World.add(world, draggingPancake);
+    Body.setStatic(draggingPancake, true);
+    isHolding = true;
+  }
+});
+
+canvas.addEventListener("mousemove", e => {
+  if (isGameOver) return;
+  if (isHolding && draggingPancake) {
+    const pos = getMousePosition(e);
+    Body.setPosition(draggingPancake, { x: pos.x, y: pos.y });
+  }
+});
+
+canvas.addEventListener("mouseup", e => {
+  if (isGameOver) return;
+  if (isHolding && draggingPancake) {
+    // Release the pancake: make it dynamic and let it fall
+    Body.setStatic(draggingPancake, false);
+    pancakes.push(draggingPancake);
+    draggingPancake = null;
+    isHolding = false;
+    counter++;
+    document.getElementById("counter").innerText = counter + " 枚";
+  }
+});
+
+// Game Over判定（画面外に落ちたら）
+Events.on(engine, "afterUpdate", () => {
+  pancakes.forEach(p => {
+    if (p.position.y > window.innerHeight + 100) {
+      const gameOverElement = document.getElementById("gameOver");
+      gameOverElement.style.display = "block";
+      gameOverElement.innerText = "GAME OVER 落とした枚数: " + counter;
+      isGameOver = true;
+    }
+  });
+});
+  </script>
 </body>
 </html>
