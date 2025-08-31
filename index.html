@@ -9,7 +9,7 @@
   background: #f9b233; /* 参考画像の黄色背景 */
   overflow: hidden;
   font-family: sans-serif;
-      user-select: none;
+  user-select: none;
 }
 
 #game-container {
@@ -142,7 +142,7 @@ const runner = Runner.create();
 Runner.run(runner, engine);
 
 // Ground (plate)
-const ground = Bodies.rectangle(window.innerWidth/2, window.innerHeight - 50, 200, 20, {
+const ground = Bodies.rectangle(window.innerWidth/2, window.innerHeight - 50, 150, 20, {
   isStatic: true,
   render: { fillStyle: "#fff" }
 });
@@ -155,12 +155,13 @@ let isGameOver = false;
 let cameraTargetHeight = window.innerHeight;
 let cameraHeight = window.innerHeight;
 
-// Spawn pancake from pan
 function spawnPancake(x, y) {
   return Bodies.rectangle(x, y, 100, 20, {
     chamfer: { radius: 10 },
-    restitution: 0.2,
-    friction: 0.8,
+    restitution: 0.1,     // 弾みを弱く
+    friction: 1.0,        // 摩擦を最大に近くする
+    frictionStatic: 1.0,  // 静止摩擦も強める
+    frictionAir: 0.02,    // 空気抵抗を少し加える
     render: {
       fillStyle: "#c68642",
       strokeStyle: "#7b4f2a",
