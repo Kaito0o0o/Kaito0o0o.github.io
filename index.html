@@ -1,246 +1,141 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title></title>
-  <style>
-    body {
-  margin: 0;
-  background: #f9b233; /* 参考画像の黄色背景 */
-  overflow: hidden;
-  font-family: sans-serif;
-  user-select: none;
-}
-
-#game-container {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
-}
-
-#gameCanvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-  background: transparent;
-}
-
-/* 左上のカウンター */
-#ui {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  background: white;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 20px;
-  box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
-}
-
-#pan {
-  position: absolute;
-  top: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 120px;
-  height: 50px;
-  background: #333;
-  border-radius: 25px;
-}
-
-#pan::after {
-  content: '';
-  position: absolute;
-  right: -50px;
-  top: 15px;
-  width: 50px;
-  height: 20px;
-  background: #333;
-  border-radius: 10px;
-}
-
-.pancake {
-  width: 80px;
-  height: 20px;
-  border-radius: 50%;
-  background: #c68642;
-  border: 4px solid #7b4f2a;
-  margin: auto;
-  position: relative;
-}
-
-.face::before {
-  content: "◉";
-  position: absolute;
-  left: 22px;
-  top: 2px;
-}
-
-.face::after {
-  content: "◉";
-  position: absolute;
-  right: 22px;
-  top: 2px;
-}
-
-.face {
-  text-align: center;
-  font-size: 18px;
-  color: black;
-}
-
-#gameOver {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 48px;
-  font-weight: bold;
-  color: red;
-  display: none;
-}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スマートフォンコンパス</title>
+    <!-- Tailwind CSSを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* フォントの読み込み */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none; /* スワイプでの「戻る」などを無効化 */
+        }
+        /* コンパスの針のトランジションを滑らかに */
+        #compass-needle {
+            transition: transform 0.1s linear;
+        }
+    </style>
 </head>
-<body>
-  <div id="game-container">
-    <canvas id="gameCanvas"></canvas>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen overflow-hidden">
 
-    <!-- 左上のUI -->
-    <div id="ui">
-      <div id="counter">0 枚</div>
+    <div id="permission-container" class="text-center p-8">
+        <h1 class="text-2xl font-bold mb-4">コンパス</h1>
+        <p class="mb-6 text-gray-400">デバイスの向きセンサーへのアクセスが必要です。</p>
+        <button id="permission-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+            センサーへのアクセスを許可
+        </button>
+        <p id="error-message" class="text-red-500 mt-4"></p>
     </div>
 
-    <div id="gameOver"></div>
+    <div id="compass-container" class="hidden flex-col items-center justify-center">
+        <!-- コンパスの外観 -->
+        <div class="relative w-64 h-64 md:w-80 md:h-80 bg-gray-800 rounded-full shadow-2xl border-4 border-gray-700 flex items-center justify-center">
+            <!-- コンパスの目盛り -->
+            <div class="absolute w-full h-full">
+                <span class="absolute top-1 left-1/2 -translate-x-1/2 text-2xl font-bold text-red-500">N</span>
+                <span class="absolute bottom-1 left-1/2 -translate-x-1/2 text-xl text-gray-400">S</span>
+                <span class="absolute top-1/2 left-1 -translate-y-1/2 text-xl text-gray-400">W</span>
+                <span class="absolute top-1/2 right-1 -translate-y-1/2 text-xl text-gray-400">E</span>
+            </div>
+            
+            <!-- コンパスの針 -->
+            <div id="compass-needle" class="w-full h-full">
+                <div class="absolute top-1/2 left-1/2 w-2 h-1/2 bg-red-500 rounded-t-full -translate-x-1/2 -translate-y-full origin-bottom"></div>
+                <div class="absolute top-1/2 left-1/2 w-2 h-1/2 bg-gray-400 rounded-b-full -translate-x-1/2 origin-top"></div>
+                <div class="absolute top-1/2 left-1/2 w-4 h-4 bg-white rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+            </div>
+        </div>
 
-    <!-- フライパン -->
-    <div id="pan">
+        <!-- 角度表示 -->
+        <div class="mt-8 text-center">
+            <p class="text-5xl font-mono tracking-wider">
+                <span id="degree">0</span>°
+            </p>
+            <p id="direction" class="text-xl text-gray-400 mt-2">北</p>
+        </div>
     </div>
-  </div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-  <script>
-    // Matter.js setup
-const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
-
-const canvas = document.getElementById("gameCanvas");
-const engine = Engine.create();
-const world = engine.world;
-
-// Renderer
-const render = Render.create({
-  canvas: canvas,
-  engine: engine,
-  options: {
-    width: window.innerWidth,
-    height: window.innerHeight,
-    background: "transparent",
-    wireframes: false
-  }
-});
-
-Render.run(render);
-const runner = Runner.create();
-Runner.run(runner, engine);
-
-// Ground (plate)
-const ground = Bodies.rectangle(window.innerWidth/2, window.innerHeight - 50, 150, 20, {
-  isStatic: true,
-  render: { fillStyle: "#fff" }
-});
-World.add(world, ground);
-
-let counter = 0;
-let draggingPancake = null;
-let pancakes = [];
-let isGameOver = false;
-let cameraTargetHeight = window.innerHeight;
-let cameraHeight = window.innerHeight;
-
-function spawnPancake(x, y) {
-  return Bodies.rectangle(x, y, 100, 20, {
-    chamfer: { radius: 10 },
-    restitution: 0.1,     // 弾みを弱く
-    friction: 1.0,        // 摩擦を最大に近くする
-    frictionStatic: 1.0,  // 静止摩擦も強める
-    frictionAir: 0.02,    // 空気抵抗を少し加える
-    render: {
-      fillStyle: "#c68642",
-      strokeStyle: "#7b4f2a",
-      lineWidth: 4
-    }
-  });
-}
-
-// Define pan area as rectangle around top center
-const panX = window.innerWidth / 2;
-const panY = 100;
-const panWidth = 150;
-const panHeight = 50;
-
-let isHolding = false;
 
 
-// Helper: get mouse position in world coordinates
-function getMousePosition(e) {
-  const rect = canvas.getBoundingClientRect();
-  // Mouse position relative to canvas
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
-  // Map to world coordinates using render.bounds
-  const bounds = render.bounds;
-  const canvasWidth = rect.width;
-  const canvasHeight = rect.height;
-  const worldX =
-    bounds.min.x + (mouseX / canvasWidth) * (bounds.max.x - bounds.min.x);
-  const worldY =
-    bounds.min.y + (mouseY / canvasHeight) * (bounds.max.y - bounds.min.y);
-  return { x: worldX, y: worldY };
-}
+    <script>
+        const permissionContainer = document.getElementById('permission-container');
+        const permissionButton = document.getElementById('permission-button');
+        const errorMessage = document.getElementById('error-message');
+        const compassContainer = document.getElementById('compass-container');
+        const needle = document.getElementById('compass-needle');
+        const degreeElement = document.getElementById('degree');
+        const directionElement = document.getElementById('direction');
 
-canvas.addEventListener("mousedown", e => {
-  if (isGameOver) return;
-  if (!isHolding && !draggingPancake) {
-    // Get mouse position in world coordinates
-    const pos = getMousePosition(e);
-    // Spawn pancake at cursor position, static
-    draggingPancake = spawnPancake(pos.x, pos.y);
-    World.add(world, draggingPancake);
-    Body.setStatic(draggingPancake, true);
-    isHolding = true;
-  }
-});
+        // イベントリスナーを開始する関数
+        const startOrientationListener = () => {
+            // ユーザーに許可を求めるUIを非表示にし、コンパスを表示
+            permissionContainer.classList.add('hidden');
+            compassContainer.classList.add('flex');
+            compassContainer.classList.remove('hidden');
 
-canvas.addEventListener("mousemove", e => {
-  if (isGameOver) return;
-  if (isHolding && draggingPancake) {
-    const pos = getMousePosition(e);
-    Body.setPosition(draggingPancake, { x: pos.x, y: pos.y });
-  }
-});
+            window.addEventListener('deviceorientation', handleOrientation);
+        };
+        
+        // センサーのデータを処理する関数
+        const handleOrientation = (event) => {
+            // event.alphaはデバイスの向き（0が北）
+            // event.webkitCompassHeadingはiOS Safari用の代替プロパティ
+            const alpha = event.webkitCompassHeading || event.alpha;
 
-canvas.addEventListener("mouseup", e => {
-  if (isGameOver) return;
-  if (isHolding && draggingPancake) {
-    // Release the pancake: make it dynamic and let it fall
-    Body.setStatic(draggingPancake, false);
-    pancakes.push(draggingPancake);
-    draggingPancake = null;
-    isHolding = false;
-    counter++;
-    document.getElementById("counter").innerText = counter + " 枚";
-  }
-});
+            if (alpha === null) {
+                // データが取得できない場合は何もしない
+                return;
+            }
 
-// Game Over判定（画面外に落ちたら）
-Events.on(engine, "afterUpdate", () => {
-  pancakes.forEach(p => {
-    if (p.position.y > window.innerHeight + 100) {
-      const gameOverElement = document.getElementById("gameOver");
-      gameOverElement.style.display = "block";
-      gameOverElement.innerText = "GAME OVER 落とした枚数: " + counter;
-      isGameOver = true;
-    }
-  });
-});
-  </script>
+            const degree = Math.round(alpha);
+            
+            // CSSを更新してコンパスの針を回転させる
+            needle.style.transform = `rotate(${degree}deg)`;
+            
+            // 画面の数値を更新
+            degreeElement.textContent = degree;
+            directionElement.textContent = getDirection(degree);
+        };
+        
+        // 角度から方角の文字列を取得する関数
+        const getDirection = (degree) => {
+            if (degree >= 337.5 || degree < 22.5) return '北';
+            if (degree < 67.5) return '北東';
+            if (degree < 112.5) return '東';
+            if (degree < 157.5) return '南東';
+            if (degree < 202.5) return '南';
+            if (degree < 247.5) return '南西';
+            if (degree < 292.5) return '西';
+            if (degree < 337.5) return '北西';
+        };
+
+        // ページ読み込み時の処理
+        window.addEventListener('load', () => {
+            // iOS 13以降では、センサーデータにアクセスするためにユーザーの許可が必要
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                permissionButton.addEventListener('click', () => {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(permissionState => {
+                            if (permissionState === 'granted') {
+                                // 許可された場合
+                                startOrientationListener();
+                            } else {
+                                // 拒否された場合
+                                errorMessage.textContent = 'センサーへのアクセスが拒否されました。';
+                            }
+                        })
+                        .catch(error => {
+                            console.error(error);
+                            errorMessage.textContent = 'エラーが発生しました。ページを再読み込みしてください。';
+                        });
+                });
+            } else {
+                // Androidなど、許可が不要なデバイスの場合
+                startOrientationListener();
+            }
+        });
+    </script>
 </body>
 </html>
